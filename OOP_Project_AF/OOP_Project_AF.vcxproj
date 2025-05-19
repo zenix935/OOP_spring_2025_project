@@ -108,7 +108,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\MINE\codes\OOP_Project_AF\OOP_Project_AF\SDL3-3.2.14\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\MINE\codes\OOP_Project_AF\OOP_Project_AF\SDL3-3.2.14\include;C:\MINE\codes\eigen-3.4.0;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -135,10 +135,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Model.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Model.h" />
+    <ClInclude Include="Component.h" />
+    <ClInclude Include="CurrentSource.h" />
+    <ClInclude Include="Matrix.h" />
+    <ClInclude Include="Node.h" />
+    <ClInclude Include="Resistor.h" />
+    <ClInclude Include="VoltageSource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
