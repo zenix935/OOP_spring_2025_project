@@ -134,14 +134,30 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Capacitor.cpp" />
+    <ClCompile Include="Circuit.cpp" />
+    <ClCompile Include="CommandParser.cpp" />
+    <ClCompile Include="Complex.cpp" />
+    <ClCompile Include="CurrentSource.cpp" />
+    <ClCompile Include="Element.cpp" />
+    <ClCompile Include="Exeptions.cpp" />
+    <ClCompile Include="Inductor.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Matrix.cpp" />
+    <ClCompile Include="Ressistor.cpp" />
+    <ClCompile Include="VoltageSource.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Component.h" />
+    <ClInclude Include="Capacitor.h" />
+    <ClInclude Include="Circuit.h" />
+    <ClInclude Include="CommandParser.h" />
+    <ClInclude Include="Complex.h" />
     <ClInclude Include="CurrentSource.h" />
+    <ClInclude Include="Element.h" />
+    <ClInclude Include="Exeptions.h" />
+    <ClInclude Include="Inductor.h" />
     <ClInclude Include="Matrix.h" />
-    <ClInclude Include="Node.h" />
-    <ClInclude Include="Resistor.h" />
+    <ClInclude Include="Ressistor.h" />
     <ClInclude Include="VoltageSource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
