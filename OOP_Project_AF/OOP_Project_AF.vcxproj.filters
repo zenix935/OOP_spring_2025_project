@@ -24,7 +24,7 @@
     <ClCompile Include="Element.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Ressistor.cpp">
+    <ClCompile Include="Resistor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Capacitor.cpp">
@@ -53,13 +53,13 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Exeptions.h">
+    <ClInclude Include="Exceptions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Element.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Ressistor.h">
+    <ClInclude Include="Resistor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Capacitor.h">
