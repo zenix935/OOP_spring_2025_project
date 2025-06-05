@@ -1,4 +1,5 @@
 #include "Element.h"
+#include "CommandParser.h"
 #include <map>
 #include <cctype>
 using namespace std;

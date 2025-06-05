@@ -12,5 +12,11 @@ public:
     std::string toString() const override;
     double getValue() const { return value; }
     Complex getComplexAdmittance(double frequency) const override;
+    void stampTransient(Matrix<double>& A,std::vector<double>& b,
+        const std::map<std::string,int>& nodeToIndex,
+        const std::map<std::string,int>& voltageSourceNameToCurrentIndex,
+        double dt,double time,
+        const std::vector<double>& prev_voltages,
+        const std::vector<double>& prev_branch_currents) override;
 };
 #endif 
