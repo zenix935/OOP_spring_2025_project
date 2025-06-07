@@ -1,71 +1,86 @@
 #include "VoltageSource.h"
-#include <string>
-// Constructor for DC analysis
-VoltageSource::VoltageSource(const string& name,const string& node1,const string& node2,const string& valueStr)
-    : Element(name,node1,node2,"VoltageSource"),ac_magnitude(0.0),ac_phase_deg(0.0),ac_frequency(0.0)
-{
-    this->dc_value=parseValue(valueStr);
+#include <stdexcept> // For invalid_argument, out_of_range
+#include <string>    // For to_string
+#include <cmath>     // For sin, cos, M_PI
+
+using namespace std;
+
+// Constructor for DC Voltage Source
+VoltageSource::VoltageSource(const string& name,const string& node1,const string& node2,const string& dcValueStr)
+    : Element(name,node1,node2,"VoltageSource"), // Changed base class constructor call
+    dc_value(parseValue(dcValueStr)),
+    ac_magnitude(0.0),ac_phase(0.0),ac_frequency(0.0) {
+    // No specific checks for voltage value yet (can be negative for polarity)
 }
-// Constructor for AC analysis (magnitude, phase, frequency)
-VoltageSource::VoltageSource(const string& name,const string& node1,const string& node2,const string& acMagStr
-    ,const string& acPhaseStr,const string& acFreqstr)
-    : Element(name,node1,node2,"VoltageSource"),dc_value(0.0) 
-{   // DC value is 0 for AC source
-    this->ac_magnitude=parseValue(acMagStr);
-    this->ac_phase_deg=parseValue(acPhaseStr);
-	this->ac_frequency=parseValue(acFreqstr);
-	if(this->ac_frequency<0.0)
-		throw InvalidValueError("AC frequency cannot be negative.");
-}
-string VoltageSource::toString() const 
-{
-    if(ac_magnitude>0)
-        return "VoltageSource "+name+" "+node1+" "+node2+" AC: "+to_string(ac_magnitude)+"V, "
-        +to_string(ac_phase_deg)+"°, "+to_string(ac_frequency)+"Hz";
-    else
-        return "VoltageSource "+name+" "+node1+" "+node2+" DC: "+to_string(dc_value)+"V";
-}
-// Getter for AC phasor (complex number) - now takes analysisFrequency
-Complex VoltageSource::getACPhasor(double analysisFrequency) const 
-{
-    // For AC analysis, the frequency is driven by the sweep.
-    // The source's internal ac_frequency is primarily for transient analysis.
-    // Here, we use the analysisFrequency passed in.
-    return Complex::polar(ac_magnitude,ac_phase_deg*M_PI/180.0);
-}
-// Override to get instantaneous value for transient analysis
-double VoltageSource::getInstantaneousValue(double time) const 
-{
-    if(ac_magnitude>0&&ac_frequency>0) 
-    {
-        // Sine wave: V(t) = Magnitude * sin(2 * pi * freq * t + phase_radians)
-        double phase_radians=ac_phase_deg*M_PI/180.0;
-        return ac_magnitude*sin(2.0*M_PI*ac_frequency*time+phase_radians);
+
+// Constructor for AC Voltage Source
+VoltageSource::VoltageSource(const string& name,const string& node1,const string& node2,
+    const string& acMagnitudeStr,const string& acPhaseStr,const string& acFrequencyStr)
+    : Element(name,node1,node2,"VoltageSource"),dc_value(0.0) { // Changed base class constructor call
+    this->ac_magnitude=parseValue(acMagnitudeStr);
+    this->ac_phase=parseValue(acPhaseStr);
+    this->ac_frequency=parseValue(acFrequencyStr);
+
+    if(this->ac_magnitude<0) {
+        throw InvalidValueError("AC magnitude for voltage source cannot be negative.");
     }
-    else
-        return dc_value; // For DC source or AC source with 0 magnitude/frequency
+    if(this->ac_frequency<0) { // Frequency usually positive, 0 for DC equivalent
+        throw InvalidValueError("AC frequency for voltage source cannot be negative.");
+    }
 }
-// Implement stampTransient for voltage sources
-void VoltageSource::stampTransient(Matrix<double>& A,vector<double>& b,const map<string,int>& nodeToIndex,
-    const map<string,int>& voltageSourceNameToCurrentIndex,double dt,double time,
-    const vector<double>& prev_voltages,const vector<double>& prev_branch_currents) 
-{
-    (void)dt; // Unused in voltage source stamping
-    (void)prev_voltages; // Unused in voltage source stamping
-    (void)prev_branch_currents; // Unused in voltage source stamping
-    int idx1=(node1=="GND")?-1:nodeToIndex.at(node1);
-    int idx2=(node2=="GND")?-1:nodeToIndex.at(node2);
-    int branchIdx=voltageSourceNameToCurrentIndex.at(name); // Get branch current index
-    // KCL equation contributions (rows corresponding to nodes)
-    if(idx1!=-1)
-        A.add(idx1,branchIdx,1.0); // +1 coefficient for branch current leaving n1
-    if(idx2!=-1)
-        A.add(idx2,branchIdx,-1.0); // -1 coefficient for branch current entering n2
-    // Voltage constraint equation (row corresponding to branch current)
-    // V_n1 - V_n2 = Instantaneous_Voltage
-    if(idx1!=-1)
-        A.add(branchIdx,idx1,1.0);
-    if(idx2!=-1)
-        A.add(branchIdx,idx2,-1.0);
-    b[branchIdx]+=getInstantaneousValue(time); // RHS for voltage constraint (time-varying)
+
+// toString method implementation
+string VoltageSource::toString() const {
+    if(isACSource()) {
+        return "VoltageSource "+name+" "+node1+" "+node2+" AC Mag="+to_string(ac_magnitude)+"V Phase="+to_string(ac_phase)+"deg Freq="+to_string(ac_frequency)+"Hz";
+    }
+    else {
+        return "VoltageSource "+name+" "+node1+" "+node2+" DC="+to_string(dc_value)+"V";
+    }
+}
+
+// Get the phasor for AC analysis at a given analysis frequency
+Complex VoltageSource::getACPhasor(double analysisFrequency) const {
+    if(isACSource()&&ac_frequency==analysisFrequency) {
+        // Convert magnitude and phase to complex number
+        double phase_rad=ac_phase*M_PI/180.0;
+        return Complex(ac_magnitude*cos(phase_rad),ac_magnitude*sin(phase_rad));
+    }
+    else if(ac_frequency==0.0&&analysisFrequency==0.0) {
+        // DC analysis, treat as DC value with 0 phase
+        return Complex(dc_value,0.0);
+    }
+    else {
+        // If source frequency doesn't match analysis frequency, it's a short circuit (0 voltage)
+        // or if it's a DC source and AC analysis is being run.
+        return Complex(0.0,0.0);
+    }
+}
+
+// Get instantaneous value for transient analysis
+double VoltageSource::getInstantaneousValue(double time) const {
+    if(isACSource()) {
+        // For AC source, instantaneous value is magnitude * sin(omega*t + phase)
+        double omega=2*M_PI*ac_frequency;
+        double phase_rad=ac_phase*M_PI/180.0;
+        return ac_magnitude*sin(omega*time+phase_rad);
+    }
+    else {
+        // For DC source, instantaneous value is just the DC value
+        return dc_value;
+    }
+}
+
+// Independent Voltage Sources are handled directly by the Circuit::solveTransient method
+// because they introduce a new row/column in the MNA matrix.
+void VoltageSource::stampTransient(Matrix<double>& A,vector<double>& b,
+    const map<string,int>& nodeToIndex,
+    const map<string,int>& voltageSourceNameToCurrentIndex,
+    double dt,double time,
+    const vector<double>& prev_voltages,
+    const vector<double>& prev_branch_currents) {
+    // This method is intentionally empty for VoltageSource, as its contribution
+    // to 'A' and 'b' is handled directly in Circuit::solveTransient based on its instantaneous value.
+    // The parameters are marked (void) to suppress unused variable warnings.
+    (void)A; (void)b; (void)nodeToIndex; (void)voltageSourceNameToCurrentIndex; (void)dt; (void)time; (void)prev_voltages; (void)prev_branch_currents;
 }
