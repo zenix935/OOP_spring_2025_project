@@ -1,7 +1,7 @@
 #include "Capacitor.h"
-#include "Matrix.h"   // <--- ADDED THIS LINE
-#include <string>     // For to_string
-#include <cmath>      // For M_PI
+#include "Matrix.h"
+#include <string>
+#include <cmath>
 
 using namespace std;
 
@@ -21,7 +21,6 @@ string Capacitor::toString() const {
 
 // Override to get complex admittance for AC analysis
 Complex Capacitor::getComplexAdmittance(double frequency) const {
-    // Admittance of a capacitor is j * omega * C
     double omega=2*M_PI*frequency;
     return J*Complex(0.0,omega*value);
 }
@@ -33,24 +32,19 @@ void Capacitor::stampTransient(Matrix<double>& A,vector<double>& b,
     double dt,double time,
     const vector<double>& prev_voltages,
     const vector<double>& prev_branch_currents) {
-    (void)time; // Unused in stamping
-    (void)prev_branch_currents; // Unused for capacitor stamping
-    (void)voltageSourceNameToCurrentIndex; // Unused for capacitor stamping
+    (void)time;
+    (void)prev_branch_currents;
+    (void)voltageSourceNameToCurrentIndex;
 
     if(dt<=0) {
         throw CircuitError("Time step (dt) must be positive for transient analysis.");
     }
 
-    // Trapezoidal Rule Companion Model for Capacitor:
-    // Current I_C(t) = G_eq * V_C(t) + I_eq
-    // where G_eq = 2C / dt
-    // and I_eq = (2C / dt) * V_C(t-dt) + I_C(t-dt)
-    // We need V_C(t-dt) and I_C(t-dt) from previous step.
-
     double G_eq=2.0*value/dt; // Equivalent conductance
 
-    // Equivalent current source (from previous state)
-    double I_eq=G_eq*prev_voltage_diff+prev_current_through;
+    // Calculate I_history(t_{n-1})
+    // This is the current source part of the companion model
+    double I_history=G_eq*prev_voltage_diff+prev_current_through;
 
     int idx1=(node1=="GND")?-1:nodeToIndex.at(node1);
     int idx2=(node2=="GND")?-1:nodeToIndex.at(node2);
@@ -67,12 +61,23 @@ void Capacitor::stampTransient(Matrix<double>& A,vector<double>& b,
         A.add(idx2,idx1,-G_eq);
     }
 
-    // Stamp I_eq into the RHS vector (current leaving node1, entering node2)
+    // Stamp I_history into the RHS vector
+    // If I_history is defined such that I_C(t_n) = G_eq * V_C(t_n) - I_history,
+    // then current I_history flows into node1 and out of node2.
+    // So for KCL at node1 (sum of currents leaving): -I_history is added to RHS.
+    // For KCL at node2 (sum of currents leaving): +I_history is added to RHS.
+    // This corresponds to I_history as a source FROM node2 TO node1.
+
+    // Let's invert the sign based on the common SPICE convention for history sources
+    // which effectively pushes the history term to the RHS with the opposite sign.
+    // If element current is N1->N2, the history current source is N2->N1.
+    // Current leaves N2 (so -ve in N2 KCL), enters N1 (so +ve in N1 KCL).
+    // When moved to RHS of A*x=b, this means b[N1] += I_history, b[N2] -= I_history.
     if(idx1!=-1) {
-        b[idx1]-=I_eq;
+        b[idx1]+=I_history; // <--- CHANGED SIGN
     }
     if(idx2!=-1) {
-        b[idx2]+=I_eq;
+        b[idx2]-=I_history; // <--- CHANGED SIGN
     }
 }
 
@@ -82,8 +87,8 @@ void Capacitor::updateTransientState(const vector<double>& current_voltages,
     const map<string,int>& nodeToIndex,
     const map<string,int>& voltageSourceNameToCurrentIndex,
     double dt) {
-    (void)current_branch_currents; // Not directly used for capacitor state update
-    (void)voltageSourceNameToCurrentIndex; // Not directly used for capacitor state update
+    (void)current_branch_currents;
+    (void)voltageSourceNameToCurrentIndex;
 
     int idx1=(node1=="GND")?-1:nodeToIndex.at(node1);
     int idx2=(node2=="GND")?-1:nodeToIndex.at(node2);
@@ -91,27 +96,16 @@ void Capacitor::updateTransientState(const vector<double>& current_voltages,
     double V1=(idx1!=-1)?current_voltages[idx1]:0.0;
     double V2=(idx2!=-1)?current_voltages[idx2]:0.0;
 
-    double current_voltage_diff=V1-V2;
+    double current_voltage_diff=V1-V2; // This is V_C(n)
 
-    // Update previous voltage difference for next step
+    double old_prev_voltage_diff=prev_voltage_diff;
+    double old_prev_current_through=prev_current_through;
+
     prev_voltage_diff=current_voltage_diff;
 
-    // Calculate current through capacitor at current step (for next step's I_eq)
-    // I_C(t) = G_eq * V_C(t) + I_eq_from_prev_step
-    // So, I_C(t) is the current determined by the MNA solution.
-    // The current through the capacitor is the difference in currents at the nodes
-    // due to the capacitor's companion model.
-    // This is implicitly handled by the MNA solution.
-    // We need I_C(t) for the next I_eq.
-    // I_C(t) = G_eq * (V_C(t) - V_C(t-dt)) + I_C(t-dt)
-    // Here, V_C(t) is current_voltage_diff, V_C(t-dt) is prev_voltage_diff.
-    // The current I_C(t) is the current flowing through the companion model.
-    // It's already implicitly calculated by the MNA.
-    // The simplified update for I_C(t) for the next step's I_eq:
-    // I_C(t) = (2C/dt) * (V_C(t) - V_C(t-dt)) - I_C(t-dt)
-    // This is derived from I_C(t) + I_C(t-dt) = (2C/dt) * (V_C(t) - V_C(t-dt))
-    // So, prev_current_through becomes the calculated I_C(t)
-    prev_current_through=(2.0*value/dt)*(current_voltage_diff-prev_voltage_diff)-prev_current_through;
+    // Calculation of current through capacitor at current step (I_C(n))
+    // I_C(n) = (2C/dt) * (V_C(n) - V_C(n-1)) - I_C(n-1)
+    prev_current_through=(2.0*value/dt)*(current_voltage_diff-old_prev_voltage_diff)-old_prev_current_through;
 }
 
 // Override to initialize transient state

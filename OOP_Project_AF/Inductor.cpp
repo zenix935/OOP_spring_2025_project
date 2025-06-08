@@ -1,3 +1,4 @@
+
 #include "Inductor.h"
 #include "Matrix.h"   // <--- ADDED THIS LINE
 #include <string>     // For to_string
