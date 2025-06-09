@@ -1,8 +1,8 @@
-
 #include "Inductor.h"
-#include "Matrix.h"   // <--- ADDED THIS LINE
-#include <string>     // For to_string
-#include <cmath>      // For M_PI
+#include "Matrix.h"    // Required for Matrix<double>
+#include "Complex.h"
+#include <string>
+#include <cmath>       // For M_PI, std::abs
 
 using namespace std;
 
@@ -24,8 +24,8 @@ string Inductor::toString() const {
 Complex Inductor::getComplexAdmittance(double frequency) const {
     // Admittance of an inductor is 1 / (j * omega * L) = -j / (omega * L)
     double omega=2*M_PI*frequency;
-    if(omega==0) { // Handle DC case (short circuit)
-        return Complex(0.0,0.0); // Treated as open for admittance, but MNA needs short.
+    if(omega==0) { // Handle DC case (short circuit for voltage constraint)
+        return Complex(0.0,0.0); // An ideal inductor is a short circuit at DC (0 frequency)
     }
     return Complex(0.0,-1.0/(omega*value));
 }
@@ -37,44 +37,60 @@ void Inductor::stampTransient(Matrix<double>& A,vector<double>& b,
     double dt,double time,
     const vector<double>& prev_voltages,
     const vector<double>& prev_branch_currents) {
-    (void)time; // Unused in stamping
-    (void)prev_voltages; // Unused for inductor stamping directly into MNA
-    (void)voltageSourceNameToCurrentIndex; // Unused for inductor stamping
+    (void)time; // 'time' is not used directly in this method
+    (void)prev_voltages;        // Not directly used here
+    (void)prev_branch_currents; // Not directly used here
 
     if(dt<=0) {
         throw CircuitError("Time step (dt) must be positive for transient analysis.");
     }
 
+    // Find the index of the inductor's branch current in the MNA matrix/vector
     auto it=voltageSourceNameToCurrentIndex.find(name);
     if(it==voltageSourceNameToCurrentIndex.end()) {
         throw CircuitError("Inductor '"+name+"' does not have a registered branch current index for transient analysis.");
     }
     int branchIdx=it->second;
 
-    double R_eq=2.0*value/dt; // Equivalent resistance
-    double V_eq=R_eq*prev_current+prev_voltage_across; // Equivalent voltage source
+    // Calculate the equivalent resistance (R_eq) for the trapezoidal companion model
+    double R_eq=2.0*value/dt;
 
+    // Calculate the equivalent voltage source (V_eq) for the history term.
+    // V_eq = V_L(n-1) + R_eq * I_L(n-1)
+    double V_eq=prev_voltage_across+R_eq*prev_current;
+
+    // Get the global indices for the component's nodes, handling GND (index -1)
     int idx1=(node1=="GND")?-1:nodeToIndex.at(node1);
     int idx2=(node2=="GND")?-1:nodeToIndex.at(node2);
 
-    // KCL equations (rows corresponding to nodes)
-    if(idx1!=-1) {
-        A.add(idx1,branchIdx,1.0); // +1 coefficient for branch current leaving n1
-    }
-    if(idx2!=-1) {
-        A.add(idx2,branchIdx,-1.0); // -1 coefficient for branch current entering n2
-    }
+    // Stamp the MNA matrix (A) coefficients related to the inductor
+    // The branch voltage constraint equation (row for branchIdx) is: V_n1 - V_n2 - R_eq * I_L = -V_eq
+    // Or, (V_n1 - V_n2) - R_eq * I_L + V_eq = 0
+    // So, in A*x=b form, the V_eq term goes to the RHS as -V_eq.
 
-    // Voltage constraint equation (row corresponding to branch current)
-    // V_n1 - V_n2 - I_L * R_eq = V_eq
+    // Add coefficients for V_node1 and V_node2
     if(idx1!=-1) {
         A.add(branchIdx,idx1,1.0);
     }
     if(idx2!=-1) {
         A.add(branchIdx,idx2,-1.0);
     }
+    // Add coefficient for the inductor's branch current (I_L)
     A.add(branchIdx,branchIdx,-R_eq); // Coefficient for inductor current variable
-    b[branchIdx]+=V_eq; // RHS for voltage constraint
+
+    // Stamp the RHS vector (b)
+    // The V_eq term goes to the RHS with a negative sign.
+    b[branchIdx]-=V_eq;
+
+    // KCL equations (rows corresponding to nodes)
+    // Inductor branch current (I_L) variable is involved in KCL equations at its nodes.
+    // I_L flows from node1 to node2.
+    if(idx1!=-1) {
+        A.add(idx1,branchIdx,1.0); // +1 coefficient for branch current leaving n1
+    }
+    if(idx2!=-1) {
+        A.add(idx2,branchIdx,-1.0); // -1 coefficient for branch current entering n2
+    }
 }
 
 // Override to update internal state after a transient step
@@ -83,33 +99,34 @@ void Inductor::updateTransientState(const vector<double>& current_voltages,
     const map<string,int>& nodeToIndex,
     const map<string,int>& voltageSourceNameToCurrentIndex,
     double dt) {
-    (void)nodeToIndex; // Not directly used for inductor state update
-    (void)dt; // dt is needed for the calculation
+    (void)nodeToIndex; // Not directly used for inductor state update here
+    (void)dt;          // dt not directly used here
 
     auto it=voltageSourceNameToCurrentIndex.find(name);
     if(it==voltageSourceNameToCurrentIndex.end()) {
         // This should not happen if stampTransient succeeded.
-        cerr<<"Error: Inductor '"<<name<<"' missing branch current index during state update.\n";
+        // If it does, consider adding more robust error handling or logging.
         return;
     }
     int branchIdx=it->second;
 
-    // The current through the inductor is the solved branch current
+    // The current through the inductor is the solved branch current (I_L(n))
     double current_I=current_branch_currents[branchIdx];
 
-    // The voltage across the inductor at the current step (for next step's V_eq)
+    // The voltage across the inductor at the current step (V_L(n))
     int idx1=(node1=="GND")?-1:nodeToIndex.at(node1);
     int idx2=(node2=="GND")?-1:nodeToIndex.at(node2);
     double V1=(idx1!=-1)?current_voltages[idx1]:0.0;
     double V2=(idx2!=-1)?current_voltages[idx2]:0.0;
     double current_V_across=V1-V2;
 
-    // Update previous values
+    // Update previous values with the current step's solved values.
+    // These become I_L(n-1) and V_L(n-1) for the *next* time step's calculations.
     prev_current=current_I;
     prev_voltage_across=current_V_across;
 }
 
-// Override to initialize transient state
+// Override to initialize transient state (usually to zero for initial conditions)
 void Inductor::initializeTransientState() {
     prev_current=0.0;
     prev_voltage_across=0.0;
