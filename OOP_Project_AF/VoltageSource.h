@@ -1,13 +1,11 @@
 #ifndef VOLTAGESOURCE_H
 #define VOLTAGESOURCE_H
-
-#include "Element.h" // Changed from CircuitElement.h
-#include "Complex.h"        // For AC analysis
-#include <string>           // For string
-
+#include "Element.h" 
+#include "Complex.h"      
+#include <string>       
 using namespace std;
-
-class VoltageSource : public Element { // Changed base class to Element
+class VoltageSource : public Element 
+{ 
 private:
     double dc_value;     // DC voltage in Volts
     double ac_magnitude; // AC magnitude in Volts
@@ -16,7 +14,6 @@ private:
 
     // Helper to check if it's an AC source
     bool isACSource() const { return ac_magnitude>0||ac_phase!=0||ac_frequency>0; }
-
 public:
     // Constructor for DC Voltage Source
     VoltageSource(const string& name,const string& node1,const string& node2,const string& dcValueStr);
@@ -39,7 +36,8 @@ public:
     double getInstantaneousValue(double time) const override;
 
     // Voltage sources do not have admittance for MNA (they add a row/column for branch current)
-    Complex getComplexAdmittance(double frequency) const override {
+    Complex getComplexAdmittance(double frequency) const override 
+    {
         // A voltage source is ideally a short circuit with a controlled voltage.
         // Its admittance is theoretically infinite, but for MNA, it's handled
         // by adding a branch current variable, not by stamping an admittance.
@@ -48,12 +46,8 @@ public:
 
     // Independent Voltage Sources add a branch current variable.
     // The stampTransient method handles their contribution to the MNA matrix and RHS.
-    void stampTransient(Matrix<double>& A,vector<double>& b,
-        const map<string,int>& nodeToIndex,
-        const map<string,int>& voltageSourceNameToCurrentIndex,
-        double dt,double time,
-        const vector<double>& prev_voltages,
-        const vector<double>& prev_branch_currents) override; // Handled directly in Circuit::solveTransient
+    void stampTransient(Matrix<double>& A,vector<double>& b,const map<string,int>& nodeToIndex,
+        const map<string,int>& voltageSourceNameToCurrentIndex,double dt,double time,
+        const vector<double>& prev_voltages,const vector<double>& prev_branch_currents) override; // Handled directly in Circuit::solveTransient
 };
-
-#endif // VOLTAGESOURCE_H
+#endif

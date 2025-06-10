@@ -1,32 +1,27 @@
 #ifndef CIRCUIT_H
 #define CIRCUIT_H
-
 #include <vector>
 #include <string>
 #include <set>
-#include <map> // For node mapping
-#include <memory> // For unique_ptr
-#include <variant> // For variant (to store last analysis type)
-
-// Include element headers
-#include "Element.h" // Changed from CircuitElement.h
+#include <map> 
+#include <memory> 
+#include <variant> 
+#include "Element.h" 
 #include "Resistor.h"
 #include "Capacitor.h"
 #include "Inductor.h"
 #include "VoltageSource.h"
 #include "CurrentSource.h"
-
-#include "Exceptions.h" // Include custom exceptions
-#include "Matrix.h"     // Include the Matrix class (now templated)
-#include "Complex.h"    // Include Complex number class
-
+#include "Exceptions.h" 
+#include "Matrix.h"     
+#include "Complex.h"    
 using namespace std;
-
-class Circuit {
+class Circuit 
+{
 private:
-    vector<unique_ptr<Element>> elements; // Changed type to Element
-    set<string> nodes; // Using set for unique and sorted nodes
-    map<string,int> nodeToIndex; // Maps node names to their matrix indices
+    vector<unique_ptr<Element>> elements; 
+    set<string> nodes; 
+    map<string,int> nodeToIndex; 
     map<string,int> voltageSourceNameToCurrentIndex; // Maps independent V-source and Inductor names to their branch current indices
 
     // Helper to check if an element name already exists (case-insensitive)
@@ -48,10 +43,13 @@ private:
     // prev_voltages and prev_branch_currents are used as the *last* solved step for .print in transient.
     vector<double> prev_voltages;
     vector<double> prev_branch_currents;
-
-
 public:
-    Circuit(); // Constructor
+    Circuit(); 
+    ~Circuit();
+	Circuit(const Circuit&)=delete; // Disable copy constructor
+	Circuit& operator=(const Circuit&)=delete; // Disable copy assignment operator
+	Circuit(Circuit&&)=default; // Enable move constructor
+	Circuit& operator=(Circuit&&)=default; // Enable move assignment operator
 
     // Add an element to the circuit (for R, C, L)
     void addElement(const string& type,const string& name,const string& node1,const string& node2,const string& valueStr);
@@ -80,7 +78,7 @@ public:
     void solveLinearDC();
 
     // Performs DC sweep for a source
-    void solveDCSweep(const string& sourceName,double startVal,double endVal,int numPoints); // NEW
+    void solveDCSweep(const string& sourceName,double startVal,double endVal,int numPoints); 
 
     // Build the Complex MNA matrix and right-hand side vector for AC analysis
     void buildACMNAMatrix(Matrix<Complex>& A_ac,vector<Complex>& b_ac,double frequency);
@@ -92,10 +90,13 @@ public:
     void solveTransient(double tstep,double tstop,double tstart,double tmaxstep);
 
     // Prints specific results (voltages or currents) from the last analysis
-    void printResults(const vector<string>& whatToPrint) const; // NEW
+    void printResults(const vector<string>& whatToPrint) const; 
+
+	void saveToFile(string& path,const vector<string>& commandHistory) const; // Save circuit to file
+
+	vector<string> openFile(const string& path); // Open circuit from file
 
     // Getter for nodeToIndex (useful for displaying results)
     const map<string,int>& getNodeToIndexMap() const { return nodeToIndex; }
 };
-
-#endif // CIRCUIT_H
+#endif 

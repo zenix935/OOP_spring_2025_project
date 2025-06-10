@@ -37,17 +37,17 @@ double Element::parseValue(const string& valueStr)
 	}
 	try { value=stod(numPart); }
 	catch(const invalid_argument& e){ throw InvalidValueError("Invalid numerical part in value: '"+valueStr+"'"); }
-	catch(const std::out_of_range& e) { throw InvalidValueError("Numerical value out of range: '"+valueStr+"'"); }
+	catch(const out_of_range& e) { throw InvalidValueError("Numerical value out of range: '"+valueStr+"'"); }
 	if(i<valueStr.length()) //if suffix exists
 	{
 		suffix=toUpper(string(1,valueStr[i]))[0];
 		if(multipliers.count(suffix))
 			value*=multipliers[suffix];
-		else if(suffix=='M'&&i+1<valueStr.length()&&toUpper(std::string(1,valueStr[i+1]))[0]=='E'
-			&&i+2<valueStr.length()&&toUpper(std::string(1,valueStr[i+2]))[0]=='G')
+		else if(suffix=='M'&&i+1<valueStr.length()&&toUpper(string(1,valueStr[i+1]))[0]=='E'
+			&&i+2<valueStr.length()&&toUpper(string(1,valueStr[i+2]))[0]=='G')
 			value*=1e6; //Handle MEG cuase MEG and M are the same in the multipliers
 		else
-			throw InvalidValueError("Unrecognized unit suffix: '"+std::string(1,valueStr[i])+"' in value: '"+valueStr+"'.");
+			throw InvalidValueError("Unrecognized unit suffix: '"+string(1,valueStr[i])+"' in value: '"+valueStr+"'.");
 	}
 	return value;
 }
